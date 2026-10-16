@@ -1,0 +1,14 @@
+.git
+.github
+.venv
+.env
+.pytest_cache
+__pycache__
+*.pyc
+*.db
+*.db-shm
+*.db-wal
+tests
+README.md
+Dockerfile
+.dockerignore

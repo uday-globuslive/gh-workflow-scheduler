@@ -32,6 +32,29 @@ python -m cronweb
 
 Open `http://<server>:8080`. To check the server, call `GET /healthz`.
 
+## Docker
+
+```bash
+docker run -d --name cronweb -p 8080:8080 \
+  --env-file .env -e DATABASE_URL=sqlite:////data/cronweb.db \
+  -v cronweb-data:/data --restart unless-stopped \
+  <dockerhub-user>/gh-workflow-scheduler:latest
+```
+
+The SQLite database is stored in the `/data` volume.
+
+The workflow in `.github/workflows/docker.yml` runs the tests and then builds images for both amd64 and arm64.
+- On every push to `main`, it pushes the image to Docker Hub tagged `latest` and `sha-xxxx`.
+- On `v*.*.*` tags, it adds version tags such as `1.2.3` and `1.2`.
+- On pull requests, it builds the image without pushing it.
+
+It needs these repository secrets:
+
+| Secret | Value |
+|---|---|
+| `DOCKERHUB_USERNAME` | Docker Hub username |
+| `DOCKERHUB_TOKEN` | Docker Hub access token (Account settings → Personal access tokens, *Read & Write*) |
+
 ## Migrating a crontab entry
 
 | Old crontab / curl                                          | Job field          |
