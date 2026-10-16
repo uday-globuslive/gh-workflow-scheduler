@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <h2 style="margin:0">Scheduled jobs</h2>
+    <a class="btn btn-primary" href="{{ url_for('web.new_job') }}">+ New job</a>
+  </div>
+  <p class="muted">
+    Scheduler on this instance:
+    {% if scheduler_running %}<span class="badge st-enabled">running</span>{% else %}<span class="badge st-disabled">not running</span>{% endif %}
+  </p>
+  {% if not jobs %}
+    <p>No jobs yet. Create one to trigger a GitHub Actions workflow on a schedule.</p>
+  {% else %}
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Workflow</th><th>Schedule</th><th>Next run</th><th>Last result</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+    {% for job in jobs %}
+      {% set last = latest[job.id] %}
+      <tr>
+        <td>
+          <a href="{{ url_for('web.job_detail', job_id=job.id) }}"><strong>{{ job.name }}</strong></a><br>
+          <span class="badge {{ 'st-enabled' if job.enabled else 'st-disabled' }}">{{ 'enabled' if job.enabled else 'disabled' }}</span>
+        </td>
+        <td>{{ job.owner }}/{{ job.repo }}<br><span class="muted">{{ job.workflow }} @ {{ job.ref }}</span></td>
+        <td><code>{{ job.cron }}</code><br><span class="muted">{{ job.timezone }}</span></td>
+        <td>{{ job.next_run_at | localtime(job.timezone) }}</td>
+        <td>
+          {% if last %}
+            <span class="badge st-{{ last.status }}">{{ last.status }}</span><br>
+            <span class="muted">{{ last.started_at | localtime(job.timezone) }}</span>
+          {% else %}<span class="muted">never</span>{% endif %}
+        </td>
+        <td>
+          <div class="actions">
+            <form method="post" action="{{ url_for('web.run_job', job_id=job.id) }}" class="inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="btn" type="submit">Run now</button>
+            </form>
+            <form method="post" action="{{ url_for('web.toggle_job', job_id=job.id) }}" class="inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="btn" type="submit">{{ 'Disable' if job.enabled else 'Enable' }}</button>
+            </form>
+            <a class="btn" href="{{ url_for('web.edit_job', job_id=job.id) }}">Edit</a>
+          </div>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

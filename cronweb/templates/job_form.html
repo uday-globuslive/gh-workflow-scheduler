@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}{{ 'New job' if is_new else 'Edit job' }} - Cron Scheduler{% endblock %}
+{% block content %}
+<div class="card">
+  <h2 style="margin-top:0">{{ 'New job' if is_new else 'Edit job' }}</h2>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    <label for="name">Name</label>
+    <input type="text" id="name" name="name" value="{{ job.name or '' }}" maxlength="100" required>
+
+    <div class="grid">
+      <div>
+        <label for="cron">Cron expression</label>
+        <input type="text" id="cron" name="cron" value="{{ job.cron or '' }}" required>
+        <div class="help">minute hour day-of-month month day-of-week &mdash; e.g. <code>0 9 * * 1</code> = Mondays 09:00</div>
+      </div>
+      <div>
+        <label for="timezone">Timezone</label>
+        <input type="text" id="timezone" name="timezone" value="{{ job.timezone or '' }}" list="tz-list" required>
+        <datalist id="tz-list">{% for tz in timezones %}<option value="{{ tz }}">{% endfor %}</datalist>
+      </div>
+    </div>
+    <div class="help" id="preview">&nbsp;</div>
+
+    <div class="grid">
+      <div>
+        <label for="owner">GitHub owner / org</label>
+        <input type="text" id="owner" name="owner" value="{{ job.owner or '' }}" required>
+      </div>
+      <div>
+        <label for="repo">Repository</label>
+        <input type="text" id="repo" name="repo" value="{{ job.repo or '' }}" required>
+      </div>
+      <div>
+        <label for="workflow">Workflow file or ID</label>
+        <input type="text" id="workflow" name="workflow" value="{{ job.workflow or '' }}" placeholder="weekly.yml" required>
+      </div>
+      <div>
+        <label for="ref">Branch / tag</label>
+        <input type="text" id="ref" name="ref" value="{{ job.ref or 'main' }}" required>
+      </div>
+    </div>
+
+    <label for="token_env">Token environment variable</label>
+    <input type="text" id="token_env" name="token_env" value="{{ job.token_env or 'GITHUB_TOKEN' }}">
+    <div class="help">Name of the server environment variable holding the GitHub token. Must start with <code>GITHUB_TOKEN</code>. The token itself is never stored in the database.</div>
+
+    <label for="inputs_json">Workflow inputs (JSON)</label>
+    <textarea id="inputs_json" name="inputs_json">{{ job.inputs_json or '{}' }}</textarea>
+
+    <label><input type="checkbox" name="enabled" {% if job.enabled %}checked{% endif %}> Enabled</label>
+
+    <p class="actions">
+      <button class="btn btn-primary" type="submit">Save</button>
+      <a class="btn" href="{{ url_for('web.index') if is_new else url_for('web.job_detail', job_id=job.id) }}">Cancel</a>
+    </p>
+  </form>
+</div>
+<script>
+  (function () {
+    const cron = document.getElementById("cron");
+    const tz = document.getElementById("timezone");
+    const out = document.getElementById("preview");
+    let timer;
+    async function update() {
+      const params = new URLSearchParams({ cron: cron.value, tz: tz.value });
+      try {
+        const res = await fetch("{{ url_for('web.cron_preview') }}?" + params.toString());
+        const data = await res.json();
+        out.textContent = data.ok ? "Next runs: " + data.runs.join("  |  ") : data.error;
+      } catch (e) {
+        out.textContent = "";
+      }
+    }
+    function schedule() { clearTimeout(timer); timer = setTimeout(update, 300); }
+    cron.addEventListener("input", schedule);
+    tz.addEventListener("change", schedule);
+    update();
+  })();
+</script>
+{% endblock %}
