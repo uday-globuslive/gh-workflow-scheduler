@@ -4,7 +4,7 @@ A small web app that replaces `crontab` + `curl` shell scripts. You define cron 
 
 ## Features
 - Create, edit, enable/disable, and delete jobs, or click **Run now**
-- Standard 5-field cron expressions with a timezone for each job, plus a live "next runs" preview
+- Standard 5-field cron expressions with a timezone for each job, plus a live "next runs" preview. To build or check an expression, use [crontab.guru](https://crontab.guru/#30_23_*_*_*); for example, `30 23 * * *` runs every day at 23:30.
 - Run history for each job (succeeded, failed, or skipped) with the GitHub HTTP status and error message
 - Tokens are read from environment variables and never stored in the database
 - Login, CSRF protection, and HttpOnly session cookies
