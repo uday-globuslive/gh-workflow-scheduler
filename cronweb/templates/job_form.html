@@ -6,6 +6,17 @@
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
+    <label for="provider">Provider</label>
+    {% if is_new %}
+      <select id="provider" name="provider">
+        {% if job.provider not in ('github', 'azure_devops') %}<option value="{{ job.provider }}" selected>Invalid provider</option>{% endif %}
+        <option value="github" {% if job.provider == 'github' %}selected{% endif %}>GitHub</option>
+        <option value="azure_devops" {% if job.provider == 'azure_devops' %}selected{% endif %}>Azure DevOps Services</option>
+      </select>
+    {% else %}
+      <input type="hidden" id="provider" name="provider" value="{{ job.provider }}">
+      <div>{{ 'Azure DevOps Services' if job.provider == 'azure_devops' else 'GitHub' }} (cannot be changed)</div>
+    {% endif %}
     <label for="name">Name</label>
     <input type="text" id="name" name="name" value="{{ job.name or '' }}" maxlength="100" required>
 
@@ -25,29 +36,32 @@
 
     <div class="grid">
       <div>
-        <label for="owner">GitHub owner / org</label>
-        <input type="text" id="owner" name="owner" value="{{ job.owner or '' }}" required>
+        <label for="owner" id="owner-label">Owner / organization</label>
+        <input type="text" id="owner" name="owner" value="{{ job.owner or '' }}" maxlength="100" required>
       </div>
       <div>
-        <label for="repo">Repository</label>
-        <input type="text" id="repo" name="repo" value="{{ job.repo or '' }}" required>
+        <label for="repo" id="repo-label">Repository / project</label>
+        <input type="text" id="repo" name="repo" value="{{ job.repo or '' }}" maxlength="100" required>
       </div>
       <div>
-        <label for="workflow">Workflow file or ID</label>
-        <input type="text" id="workflow" name="workflow" value="{{ job.workflow or '' }}" placeholder="weekly.yml" required>
+        <label for="workflow" id="workflow-label">Workflow file or ID / pipeline ID</label>
+        <input type="text" id="workflow" name="workflow" value="{{ job.workflow or '' }}" maxlength="255" required>
+        <div class="help" id="workflow-help">GitHub: workflow file or ID. Azure DevOps: positive numeric pipeline ID.</div>
       </div>
       <div>
-        <label for="ref">Branch / tag</label>
-        <input type="text" id="ref" name="ref" value="{{ job.ref or 'main' }}" required>
+        <label for="ref" id="ref-label">Branch / tag / ref</label>
+        <input type="text" id="ref" name="ref" value="{{ job.ref }}" maxlength="255">
+        <div class="help" id="ref-help">GitHub defaults to main. Azure DevOps: optional branch name or full ref; clear this field to use the pipeline default.</div>
       </div>
     </div>
 
     <label for="token_env">Token environment variable</label>
-    <input type="text" id="token_env" name="token_env" value="{{ job.token_env or 'GITHUB_TOKEN' }}">
-    <div class="help">Name of the server environment variable holding the GitHub token. Must start with <code>GITHUB_TOKEN</code>. The token itself is never stored in the database.</div>
+    <input type="text" id="token_env" name="token_env" value="{{ job.token_env }}" maxlength="100">
+    <div class="help" id="token-help">Server environment variable name, not the token: GitHub uses GITHUB_TOKEN; Azure DevOps uses AZURE_DEVOPS_PAT. Clear the field to use the selected provider's default.</div>
 
-    <label for="inputs_json">Workflow inputs (JSON)</label>
+    <label for="inputs_json" id="inputs-label">Workflow inputs / template parameters (JSON)</label>
     <textarea id="inputs_json" name="inputs_json">{{ job.inputs_json or '{}' }}</textarea>
+    <div class="help" id="inputs-help">Use a JSON object. GitHub accepts simple values; Azure DevOps supports nested template parameters. Do not put secrets here: values are stored in the database.</div>
 
     <label><input type="checkbox" name="enabled" {% if job.enabled %}checked{% endif %}> Enabled</label>
 
@@ -59,6 +73,30 @@
 </div>
 <script>
   (function () {
+    const provider = document.getElementById("provider");
+    const ref = document.getElementById("ref");
+    const token = document.getElementById("token_env");
+    let refEdited = false;
+    let tokenEdited = false;
+    ref.addEventListener("input", function () { refEdited = true; });
+    token.addEventListener("input", function () { tokenEdited = true; });
+    function updateProvider(changed) {
+      const azure = provider.value === "azure_devops";
+      document.getElementById("owner-label").textContent = azure ? "Azure DevOps organization" : "GitHub owner / organization";
+      document.getElementById("repo-label").textContent = azure ? "Azure DevOps project" : "GitHub repository";
+      document.getElementById("workflow-label").textContent = azure ? "Pipeline ID" : "Workflow file or ID";
+      document.getElementById("workflow-help").textContent = azure ? "Positive numeric pipeline ID." : "Workflow file name or numeric workflow ID.";
+      document.getElementById("ref-label").textContent = azure ? "Branch / full ref (optional)" : "Branch / tag";
+      document.getElementById("ref-help").textContent = azure ? "Leave empty to use the pipeline default, or enter a branch name or full ref." : "Leave empty to use main.";
+      document.getElementById("inputs-label").textContent = azure ? "Template parameters (JSON)" : "Workflow inputs (JSON)";
+      document.getElementById("inputs-help").textContent = azure ? "Use a JSON object; nested values are supported. Do not include secrets: values are stored in the database." : "Use a JSON object with simple values. Do not include secrets: values are stored in the database.";
+      document.getElementById("token-help").textContent = azure ? "Environment variable name starting with AZURE_DEVOPS_PAT; leave empty for the default. Do not enter the token itself." : "Environment variable name starting with GITHUB_TOKEN; leave empty for the default. Do not enter the token itself.";
+      if (changed && !refEdited && (ref.value === "main" || ref.value === "")) ref.value = azure ? "" : "main";
+      if (changed && !tokenEdited && (token.value === "GITHUB_TOKEN" || token.value === "AZURE_DEVOPS_PAT" || token.value === "")) token.value = azure ? "AZURE_DEVOPS_PAT" : "GITHUB_TOKEN";
+    }
+    provider.addEventListener("change", function () { updateProvider(true); });
+    updateProvider(false);
+
     const cron = document.getElementById("cron");
     const tz = document.getElementById("timezone");
     const out = document.getElementById("preview");

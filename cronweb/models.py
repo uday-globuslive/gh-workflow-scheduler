@@ -3,7 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, create_engine, event
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, create_engine, event, inspect, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
 
@@ -24,6 +25,7 @@ class Job(Base):
     cron: Mapped[str] = mapped_column(String(100))
     timezone: Mapped[str] = mapped_column(String(64), default="UTC")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    provider: Mapped[str] = mapped_column(String(32), default="github", server_default="github", nullable=False)
 
     owner: Mapped[str] = mapped_column(String(100))
     repo: Mapped[str] = mapped_column(String(100))
@@ -60,6 +62,33 @@ class Run(Base):
     job: Mapped[Job] = relationship(back_populates="runs")
 
 
+def _is_duplicate_provider_column(exc: DBAPIError, dialect: str) -> bool:
+    original = exc.orig
+    if dialect == "sqlite":
+        return str(original).lower() == "duplicate column name: provider"
+    if dialect == "postgresql":
+        return getattr(original, "sqlstate", None) == "42701" or getattr(original, "pgcode", None) == "42701"
+    if dialect in ("mysql", "mariadb"):
+        return bool(original.args) and original.args[0] == 1060
+    return False
+
+
+def _migrate_provider(engine) -> None:
+    # create_all does not alter existing tables. Keep this before any Job query.
+    if any(column["name"] == "provider" for column in inspect(engine).get_columns("jobs")):
+        return
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN provider VARCHAR(32) NOT NULL DEFAULT 'github'"))
+    except DBAPIError as exc:
+        # Another startup may have added the column after our inspection. Do not
+        # hide other DDL failures, and inspect on a fresh connection after rollback.
+        if not _is_duplicate_provider_column(exc, engine.dialect.name):
+            raise
+        if not any(column["name"] == "provider" for column in inspect(engine).get_columns("jobs")):
+            raise
+
+
 def init_db(url: str) -> sessionmaker:
     is_sqlite = url.startswith("sqlite")
     kwargs = {"connect_args": {"check_same_thread": False, "timeout": 30}} if is_sqlite else {}
@@ -74,4 +103,5 @@ def init_db(url: str) -> sessionmaker:
             cur.close()
 
     Base.metadata.create_all(engine)
+    _migrate_provider(engine)
     return sessionmaker(engine, expire_on_commit=False)

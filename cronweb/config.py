@@ -26,6 +26,7 @@ class Config:
     tick_seconds: int = 15
     misfire_grace_seconds: int = 3600
     secure_cookies: bool = False
+    azure_devops_api_url: str = "https://dev.azure.com"
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -46,4 +47,5 @@ class Config:
             tick_seconds=int(os.environ.get("TICK_SECONDS", cls.tick_seconds)),
             misfire_grace_seconds=int(os.environ.get("MISFIRE_GRACE_SECONDS", cls.misfire_grace_seconds)),
             secure_cookies=_bool(os.environ.get("SECURE_COOKIES"), False),
+            azure_devops_api_url=os.environ.get("AZURE_DEVOPS_API_URL", cls.azure_devops_api_url),
         )

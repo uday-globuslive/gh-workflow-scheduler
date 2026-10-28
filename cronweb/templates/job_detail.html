@@ -27,11 +27,12 @@
   </div>
 
   <table style="margin-top:1rem">
-    <tr><th style="width:180px">Repository</th><td>{{ job.owner }}/{{ job.repo }}</td></tr>
-    <tr><th>Workflow</th><td>{{ job.workflow }} @ <code>{{ job.ref }}</code></td></tr>
+    <tr><th style="width:180px">Provider</th><td>{{ 'Azure DevOps Services' if job.provider == 'azure_devops' else 'GitHub' }}</td></tr>
+    <tr><th>{{ 'Organization / project' if job.provider == 'azure_devops' else 'Repository' }}</th><td>{{ job.owner }}/{{ job.repo }}</td></tr>
+    <tr><th>{{ 'Pipeline ID' if job.provider == 'azure_devops' else 'Workflow' }}</th><td>{{ job.workflow }}{% if job.ref %} @ <code>{{ job.ref }}</code>{% elif job.provider == 'azure_devops' %} <span class="muted">(pipeline default ref)</span>{% endif %}</td></tr>
     <tr><th>Schedule</th><td><code>{{ job.cron }}</code> ({{ job.timezone }})</td></tr>
     <tr><th>Token variable</th><td><code>{{ job.token_env }}</code></td></tr>
-    <tr><th>Inputs</th><td><code>{{ job.inputs_json }}</code></td></tr>
+    <tr><th>{{ 'Template parameters' if job.provider == 'azure_devops' else 'Inputs' }}</th><td><code>{{ job.inputs_json }}</code></td></tr>
     <tr><th>Next run</th><td>{{ job.next_run_at | localtime(job.timezone) }}</td></tr>
     <tr><th>Upcoming</th><td>
       {% for t in upcoming %}{{ t.strftime('%a %Y-%m-%d %H:%M %Z') }}<br>{% else %}<span class="muted">disabled</span>{% endfor %}

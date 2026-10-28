@@ -38,7 +38,7 @@ def create_app(config: Optional[Config] = None, start_scheduler: bool = True) ->
             job.next_run_at = compute_next_run(job.cron, job.timezone, utcnow())
         s.commit()
 
-    runner = JobRunner(session_factory, cfg.github_api_url)
+    runner = JobRunner(session_factory, cfg.github_api_url, cfg.azure_devops_api_url)
     scheduler = Scheduler(session_factory, runner, cfg.tick_seconds, cfg.misfire_grace_seconds)
     app.extensions["cronweb"] = SimpleNamespace(
         config=cfg, session_factory=session_factory, runner=runner, scheduler=scheduler

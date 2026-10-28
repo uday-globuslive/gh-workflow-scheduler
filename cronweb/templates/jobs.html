@@ -10,11 +10,11 @@
     {% if scheduler_running %}<span class="badge st-enabled">running</span>{% else %}<span class="badge st-disabled">not running</span>{% endif %}
   </p>
   {% if not jobs %}
-    <p>No jobs yet. Create one to trigger a GitHub Actions workflow on a schedule.</p>
+    <p>No jobs yet. Create one to schedule a workflow or pipeline.</p>
   {% else %}
   <table>
     <thead>
-      <tr><th>Name</th><th>Workflow</th><th>Schedule</th><th>Next run</th><th>Last result</th><th>Actions</th></tr>
+      <tr><th>Name</th><th>Provider / workflow or pipeline</th><th>Schedule</th><th>Next run</th><th>Last result</th><th>Actions</th></tr>
     </thead>
     <tbody>
     {% for job in jobs %}
@@ -24,7 +24,7 @@
           <a href="{{ url_for('web.job_detail', job_id=job.id) }}"><strong>{{ job.name }}</strong></a><br>
           <span class="badge {{ 'st-enabled' if job.enabled else 'st-disabled' }}">{{ 'enabled' if job.enabled else 'disabled' }}</span>
         </td>
-        <td>{{ job.owner }}/{{ job.repo }}<br><span class="muted">{{ job.workflow }} @ {{ job.ref }}</span></td>
+        <td>{{ 'Azure DevOps Services' if job.provider == 'azure_devops' else 'GitHub' }}<br>{{ job.owner }}/{{ job.repo }}<br><span class="muted">{{ job.workflow }}{% if job.ref %} @ {{ job.ref }}{% elif job.provider == 'azure_devops' %} (pipeline default ref){% endif %}</span></td>
         <td><code>{{ job.cron }}</code><br><span class="muted">{{ job.timezone }}</span></td>
         <td>{{ job.next_run_at | localtime(job.timezone) }}</td>
         <td>
