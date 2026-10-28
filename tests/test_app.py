@@ -456,6 +456,22 @@ def test_scheduled_azure_http_failure_is_recorded_and_not_retried(app, monkeypat
         assert session.get(Job, job_id).next_run_at == datetime(2026, 10, 19, 9)
 
 
+def test_azure_json_error_is_shown_and_recorded(app, monkeypatch):
+    monkeypatch.setenv("AZURE_DEVOPS_PAT_TEAM", "fake-pat")
+    client, csrf = _logged_in_client(app)
+    job_id = _add_azure_job(app)
+    with mock.patch("cronweb.azure_devops.requests.post") as post:
+        post.return_value.status_code = 400
+        post.return_value.json.return_value = {"message": "Variable group was not found."}
+        response = client.post(f"/jobs/{job_id}/run", data={"csrf_token": csrf}, follow_redirects=True)
+    assert b"Variable group was not found." in response.data
+    assert b"Variable group was not found." in client.get(f"/jobs/{job_id}").data
+    with _ctx(app).session_factory() as session:
+        run = session.query(Run).filter_by(job_id=job_id).one()
+        assert run.status == "failed"
+        assert "Variable group was not found." in run.message
+
+
 def test_azure_job_disabled_during_claim_does_not_dispatch(app):
     now = datetime(2026, 10, 12, 9)
     job_id = _add_azure_job(app, now)

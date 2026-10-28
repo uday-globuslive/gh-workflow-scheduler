@@ -1,3 +1,4 @@
+import base64
 from unittest import mock
 
 import pytest
@@ -66,7 +67,60 @@ def test_pipeline_non_200_status_is_sanitized_failure(azure_args, status):
         result = dispatch_pipeline(**azure_args)
     assert result == DispatchResult(False, status, f"Azure DevOps request failed (HTTP {status})")
     assert azure_args["token"] not in result.message
-    post.return_value.json.assert_not_called()
+    post.return_value.json.assert_called_once()
+
+
+def test_pipeline_json_error_is_visible(azure_args):
+    with mock.patch("cronweb.azure_devops.requests.post") as post:
+        post.return_value.status_code = 400
+        post.return_value.json.return_value = {"message": "Variable group not found.\nCheck permissions."}
+        result = dispatch_pipeline(**azure_args)
+    assert result.message == "Azure DevOps request failed (HTTP 400): Variable group not found. Check permissions."
+
+
+@pytest.mark.parametrize("body", [None, [], {}, {"message": None}, {"message": ""}])
+def test_pipeline_missing_json_error_falls_back(azure_args, body):
+    with mock.patch("cronweb.azure_devops.requests.post") as post:
+        post.return_value.status_code = 400
+        post.return_value.json.return_value = body
+        result = dispatch_pipeline(**azure_args)
+    assert result.message == "Azure DevOps request failed (HTTP 400)"
+
+
+def test_pipeline_malformed_json_error_falls_back(azure_args):
+    with mock.patch("cronweb.azure_devops.requests.post") as post:
+        post.return_value.status_code = 400
+        post.return_value.json.side_effect = ValueError("bad JSON")
+        result = dispatch_pipeline(**azure_args)
+    assert result.message == "Azure DevOps request failed (HTTP 400)"
+
+
+def test_pipeline_json_error_with_pat_is_withheld(azure_args):
+    with mock.patch("cronweb.azure_devops.requests.post") as post:
+        post.return_value.status_code = 400
+        post.return_value.json.return_value = {"message": "Reflected: " + azure_args["token"]}
+        result = dispatch_pipeline(**azure_args)
+    assert azure_args["token"] not in result.message
+    assert "detail withheld" in result.message
+
+
+def test_pipeline_json_error_with_basic_credentials_is_withheld(azure_args):
+    credential = base64.b64encode((":" + azure_args["token"]).encode()).decode()
+    with mock.patch("cronweb.azure_devops.requests.post") as post:
+        post.return_value.status_code = 400
+        post.return_value.json.return_value = {"message": "Authorization: Basic " + credential}
+        result = dispatch_pipeline(**azure_args)
+    assert credential not in result.message
+    assert "detail withheld" in result.message
+
+
+def test_pipeline_json_error_is_single_line_and_bounded(azure_args):
+    with mock.patch("cronweb.azure_devops.requests.post") as post:
+        post.return_value.status_code = 400
+        post.return_value.json.return_value = {"message": "bad\nline\x00 " + "x" * 600}
+        result = dispatch_pipeline(**azure_args)
+    assert "\n" not in result.message and "\x00" not in result.message
+    assert len(result.message.split(": ", 1)[1]) == 500
 
 
 @pytest.mark.parametrize("exception", [requests.ConnectionError, requests.Timeout, UnicodeError, ValueError])

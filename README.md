@@ -43,6 +43,8 @@ The provider is fixed when a job is created; create a new job to use another pro
 
 Both scheduled jobs and **Run now** send a dispatch request to the selected provider. A `succeeded` entry means the request was accepted (GitHub HTTP 200/204 or Azure DevOps HTTP 200), not that the workflow or pipeline finished successfully. The app does not track the eventual workflow or pipeline result; check it in GitHub or Azure DevOps. A `failed` entry means the app did not confirm acceptance; a network failure can leave the remote outcome unknown. A `skipped` entry records a scheduled occurrence that exceeded the misfire grace period.
 
+For Azure DevOps failures, a JSON error message returned by the service is shown in run history and logs, subject to a length limit. A message reflecting the PAT or its Basic authentication value is withheld. Provider messages may still contain other sensitive operational information; restrict access to the UI, database, and logs, and review messages before sharing them.
+
 ### Upgrading an existing installation
 
 1. Stop **all old-version replicas**, including UI-only replicas, before starting any new-version replica against the shared database. Do not mix old and new versions in a rolling deployment: old code does not understand Azure jobs and can misinterpret or dispatch them as GitHub jobs.

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import base64
+import html
+import json
 import re
 import unicodedata
 from urllib.parse import quote, urlsplit
@@ -62,6 +65,31 @@ def _valid_base_url(url: str) -> bool:
         return False
 
 
+def _error_message(response, token: str) -> str:
+    """Use a bounded JSON error message, but never expose a reflected PAT."""
+    fallback = f"Azure DevOps request failed (HTTP {response.status_code})"
+    try:
+        body = response.json()
+    except ValueError:
+        return fallback
+    detail = body.get("message") if isinstance(body, dict) else None
+    if not isinstance(detail, str) or not detail.strip():
+        return fallback
+
+    # Check before truncating so that a partial credential cannot survive.
+    sensitive = {token, quote(token, safe=""), html.escape(token), json.dumps(token)[1:-1]}
+    for encoding in ("utf-8", "latin-1"):
+        try:
+            sensitive.add(base64.b64encode((":" + token).encode(encoding)).decode("ascii"))
+        except UnicodeEncodeError:
+            pass
+    if any(value and value in detail for value in sensitive):
+        return fallback + ": error detail withheld because it may contain the PAT"
+    detail = " ".join(detail.split())
+    detail = "".join(c for c in detail if not unicodedata.category(c).startswith("C"))
+    return fallback + ": " + detail[:500]
+
+
 def dispatch_pipeline(
     *, api_url: str, token: str, owner: str, repo: str, workflow: str,
     ref: str, inputs: dict, timeout: int = 30,
@@ -95,4 +123,4 @@ def dispatch_pipeline(
         return DispatchResult(False, None, "Azure DevOps request failed")
     if response.status_code == 200:
         return DispatchResult(True, 200, "Pipeline dispatched")
-    return DispatchResult(False, response.status_code, f"Azure DevOps request failed (HTTP {response.status_code})")
+    return DispatchResult(False, response.status_code, _error_message(response, token))
